@@ -43,7 +43,7 @@ const TokenType = enum {
     r_paren, // )
     l_bracket, // [
     r_bracket, // ]
-    l_brace, // { (reserved, not currently used by any rule but kept for symmetry)
+    l_brace, // { (reserved, not currently used by any rule but kept for... why not?)
     r_brace, // }
     dot, // .
     comma, // ,
@@ -88,4 +88,24 @@ const TokenType = enum {
 
     eof,
     unkown,
+};
+
+const Token = struct {
+    type: TokenType,
+    val: []const u8,
+    line: usize,
+    col: usize,
+};
+
+pub const Lexer = struct {
+    source: []const u8,
+    pos: usize = 0,
+    line: usize = 1,
+    col: usize = 1,
+
+    pub fn init(source: []const u8) Lexer {
+        return .{ .source = source };
+    }
+
+    //TODO: lexing functions to implement here in this struct as member functions
 };
