@@ -92,6 +92,7 @@ pub const FunctionDef = struct {
             allocator.destroy(param.type);
         }
         self.params.deinit(allocator);
+        self.type_params.deinit(allocator);
         self.result.deinit(allocator);
         allocator.destroy(self.result);
         for (self.body.items) |*stmt| stmt.deinit(allocator);
