@@ -289,11 +289,21 @@ pub const Parser = struct {
 
     fn parse_type_params(self: *Parser) !std.ArrayList(ast.TypeParam) {
         var params: std.ArrayList(ast.TypeParam) = .empty;
-
-        const tok = try self.lexer.next();
-        try params.append(self.allocator, ast.TypeParam{ .name = tok.val, .token = tok });
-        _ = try self.expect(.r_bracket, "expected ']'");
-
+        while (true) {
+            const tok = try self.expect(.ident, "expected type param name") orelse token.Token{ .type = .ident, .val = "<error>", .line = 0, .col = 0 };
+            try params.append(self.allocator, ast.TypeParam{ .name = tok.val, .token = tok });
+            if ((try self.lexer.peek_token()).type == .r_bracket) {
+                _ = try self.lexer.next();
+                break;
+            }
+            // this is here to avoid going into infinite loop
+            // when found '[' but no ']'. (it's not so good, as it gives wierd errors)
+            if (try self.expect(.comma, "expected ','") == null) {
+                try self.sync(&.{.r_bracket});
+                _ = try self.lexer.next();
+                break;
+            }
+        }
         return params;
     }
 
