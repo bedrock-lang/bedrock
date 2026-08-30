@@ -1239,6 +1239,10 @@ pub const Parser = struct {
                     .token = tok,
                 } };
             },
+            .kw_nil => {
+                lhs = try self.allocator.create(ast.Expr);
+                lhs.* = .{ .nil = .{ .token = tok } };
+            },
             .l_paren => {
                 lhs = try self.parse_expression_bp(0);
                 // expect ')'

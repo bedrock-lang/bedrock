@@ -508,6 +508,7 @@ pub const Sema = struct {
                 try self.enter_scope(ce.body.items, .block);
                 return .invalid; //todo: comptime type
             },
+            .nil => return .invalid, //todo: nil
         };
     }
 
