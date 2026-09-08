@@ -5,14 +5,21 @@ extern proc BeginDrawing();
 extern proc EndDrawing();
 extern proc CloseWindow();
 extern proc ClearBackground(c: i64);
+extern proc DrawTriangle(v1: [2]f32, v2: [2]f32, v3: [2]f32, c: i64);
 
 func main() -> i32
   var white: i64 = 245 | (245 << 8) | (245 << 16) | (255 << 24);
+  var red: i64 = 255 | (0 << 8) | (0 << 16) | (255 << 24);
+
+  var v1: [2]f32 = [400.0, 150.0];
+  var v2: [2]f32 = [250.0, 450.0];
+  var v3: [2]f32 = [550.0, 450.0];
 
   InitWindow(800, 600, "Triangle");
   while !WindowShouldClose()
     BeginDrawing();
     ClearBackground(white);
+    DrawTriangle(v1, v2, v3, red);
     EndDrawing();
   end
 
