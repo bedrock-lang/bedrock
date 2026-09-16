@@ -244,7 +244,7 @@ pub const TypeSystem = struct {
         if (a == .invalid) return b;
         if (b == .invalid or a == b) return a;
         if (self.assignable(a, b)) return b;
-        if (self.assignable(a, b)) return b;
+        if (self.assignable(b, a)) return a;
         return null;
     }
 
