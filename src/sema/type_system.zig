@@ -187,12 +187,49 @@ pub const TypeSystem = struct {
         };
     }
 
+    const NumKind = enum { signed, unsigned, float };
+    const NumRank = struct { kind: NumKind, bits: u8 };
+
+    // the numrank is rank of types in our bedrock
+    // according to their signededness and no. of bits
+    fn numeric_rank(p: Primitive) ?NumRank {
+        return switch (p) {
+            .i8 => .{ .kind = .signed, .bits = 8 },
+            .i16 => .{ .kind = .signed, .bits = 16 },
+            .i32 => .{ .kind = .signed, .bits = 32 },
+            .i64, .isize => .{ .kind = .signed, .bits = 64 },
+            .u8 => .{ .kind = .unsigned, .bits = 8 },
+            .u16 => .{ .kind = .unsigned, .bits = 16 },
+            .u32 => .{ .kind = .unsigned, .bits = 32 },
+            .u64, .usize => .{ .kind = .unsigned, .bits = 64 },
+            .f32 => .{ .kind = .float, .bits = 32 },
+            .f64 => .{ .kind = .float, .bits = 64 },
+            .bool, .char, .str, .ptr => null,
+        };
+    }
+
+    // when conversion situation arise we will use to find out
+    // if we can implicitly convert between two types (from -> to)
+    pub fn can_implicit_convert(from: Primitive, to: Primitive) bool {
+        if (from == to) return true;
+        const f = numeric_rank(from) orelse return false;
+        const t = numeric_rank(to) orelse return false;
+        if (f.kind != t.kind) return t.kind == .float and f.kind != .float;
+        // i8 -> i16 (common sense)
+        // or i64 -> isize and u64 -> usize (same)
+        return t.bits >= f.bits;
+    }
+
     // to check if an id (from) can be assign to another id (to)
     // it's useful for type conversion checking.
     pub fn assignable(self: *TypeSystem, from: TypeId, to: TypeId) bool {
         if (from == .invalid or to == .invalid) return true;
         if (from == to) return true;
         return switch (self.get(to).*) {
+            .primitive => |pto| switch (self.get(from).*) {
+                .primitive => |pfrom| can_implicit_convert(pfrom, pto),
+                else => false,
+            },
             .optional => |inner| from == inner or self.assignable(from, inner),
             .error_union => |inner| from == inner or self.assignable(from, inner),
             .slice => |s| switch (self.get(from).*) {
@@ -201,6 +238,14 @@ pub const TypeSystem = struct {
             },
             else => false,
         };
+    }
+
+    pub fn unify(self: *TypeSystem, a: TypeId, b: TypeId) ?TypeId {
+        if (a == .invalid) return b;
+        if (b == .invalid or a == b) return a;
+        if (self.assignable(a, b)) return b;
+        if (self.assignable(b, a)) return a;
+        return null;
     }
 
     // find type of literal "hi" -> string, 24 -> i32
