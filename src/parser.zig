@@ -144,7 +144,7 @@ pub const Parser = struct {
     }
 
     pub fn parse_func_def(self: *Parser, is_pub: bool, is_inline: bool) !ast.FunctionDef {
-        const func_tok = try self.lexer.next();
+        var tok = try self.lexer.next();
         var func_def = ast.FunctionDef{
             .is_pub = is_pub,
             .is_inline = is_inline,
@@ -153,13 +153,17 @@ pub const Parser = struct {
             .params = undefined,
             .result = undefined,
             .body = undefined,
-            .token = func_tok,
+            .token = tok,
         };
 
-        // todo: parse_type_params for the .type_params
+        tok = try self.lexer.peek_token();
+        if (tok.type == .l_bracket) {
+            _ = try self.lexer.next();
+            func_def.type_params = try self.parse_type_params();
+        }
 
         // get the function name
-        const name_tok = try self.expect(.ident, "expected function name") orelse token.Token{ .type = .ident, .val = "", .line = func_tok.line, .col = func_tok.col };
+        const name_tok = try self.expect(.ident, "expected function name") orelse token.Token{ .type = .ident, .val = "", .line = tok.line, .col = tok.col };
         func_def.name = name_tok.val;
 
         // extect '('
@@ -181,7 +185,7 @@ pub const Parser = struct {
     }
 
     pub fn parse_proc_def(self: *Parser, is_pub: bool, is_inline: bool) !ast.ProcDef {
-        const proc_tok = try self.lexer.next();
+        var tok = try self.lexer.next();
         var proc_def = ast.ProcDef{
             .is_pub = is_pub,
             .is_inline = is_inline,
@@ -189,13 +193,17 @@ pub const Parser = struct {
             .type_params = .empty,
             .params = .empty,
             .body = undefined,
-            .token = proc_tok,
+            .token = tok,
         };
 
-        const tok = try self.expect(.ident, "expected proc name") orelse token.Token{ .type = .ident, .val = "<error>", .line = proc_tok.line, .col = proc_tok.col };
-        proc_def.name = tok.val;
+        tok = try self.lexer.peek_token();
+        if (tok.type == .l_bracket) {
+            _ = try self.lexer.next();
+            proc_def.type_params = try self.parse_type_params();
+        }
 
-        //todo: parse_type_params
+        tok = try self.expect(.ident, "expected proc name") orelse token.Token{ .type = .ident, .val = "<error>", .line = tok.line, .col = tok.col };
+        proc_def.name = tok.val;
 
         if (try self.expect(.l_paren, "expected '('") == null) {
             try self.sync(&.{ .r_paren, .kw_end });
@@ -505,6 +513,26 @@ pub const Parser = struct {
 
         param.type = try self.parse_type();
         return param;
+    }
+
+    fn parse_type_params(self: *Parser) !std.ArrayList(ast.TypeParam) {
+        var params: std.ArrayList(ast.TypeParam) = .empty;
+        while (true) {
+            const tok = try self.expect(.ident, "expected type param name") orelse token.Token{ .type = .ident, .val = "<error>", .line = 0, .col = 0 };
+            try params.append(self.allocator, ast.TypeParam{ .name = tok.val, .token = tok });
+            if ((try self.lexer.peek_token()).type == .r_bracket) {
+                _ = try self.lexer.next();
+                break;
+            }
+            // this is here to avoid going into infinite loop
+            // when found '[' but no ']'. (it's not so good, as it gives wierd errors)
+            if (try self.expect(.comma, "expected ','") == null) {
+                try self.sync(&.{.r_bracket});
+                _ = try self.lexer.next();
+                break;
+            }
+        }
+        return params;
     }
 
     pub fn parse_body(self: *Parser) !std.ArrayList(ast.Stmt) {

@@ -1,0 +1,5 @@
+func [T, U, Z]abc() -> i32
+end
+
+proc [T, U, Z]abc()
+end
