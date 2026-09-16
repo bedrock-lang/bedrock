@@ -222,6 +222,33 @@ pub const Compiler = struct {
                 log.debug("{s}\n", .{mod_str});
             }
 
+            if (self.opt.emit_dot) {
+                const argv = [_][]const u8{
+                    "opt",
+                    "-passes=dot-cfg",
+                    "-disable-output",
+                    "dump.ll",
+                };
+
+                const result = try std.process.run(self.allocator, self.io, .{
+                    .argv = &argv,
+                    .cwd = .{ .path = "build" },
+                });
+                defer self.allocator.free(result.stdout);
+                defer self.allocator.free(result.stderr);
+
+                if (result.term != .exited or result.term.exited != 0) {
+                    log.err("Not able to emit the .dot file: {s}\n", .{result.stderr});
+                    return Error.CompilerFail;
+                }
+
+                const build_dir = try std.Io.Dir.cwd().openDir(self.io, "build", .{});
+                defer build_dir.close(self.io);
+                try build_dir.rename(".main.dot", build_dir, "dump.dot", self.io);
+
+                log.debug("build/dump.dot file formed\n", .{});
+            }
+
             if (self.opt.emit_obj) {
                 var buf: [std.fs.max_path_bytes]u8 = undefined;
                 const obj_path = try std.fmt.bufPrintZ(&buf, "{s}.o", .{self.opt.output});

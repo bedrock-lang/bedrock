@@ -7,6 +7,7 @@ pub const Options = struct {
     emit_tokens: bool = false,
     emit_ast: bool = false,
     emit_ir: bool = false,
+    emit_dot: bool = false,
     sema: bool = true,
     run_jit: bool = false,
     emit_obj: bool = false,
@@ -58,6 +59,10 @@ pub fn parse(args: anytype) !Options {
         } else if (std.mem.eql(u8, arg, "--emit-ir")) {
             options.emit_ir = true;
             options.sema = true;
+        } else if (std.mem.eql(u8, arg, "--emit-dot")) {
+            options.emit_dot = true;
+            options.emit_ir = true;
+            options.sema = true;
         } else if (std.mem.eql(u8, arg, "-o")) {
             options.emit_obj = true;
             options.link = true;
@@ -104,6 +109,7 @@ pub fn printUsage() void {
         \\Options:
         \\  --emit-ast              emit AST
         \\  --emit-ir               emit LLVM IR
+        \\  --emit-dot              emit .dot file from .ll file
         \\  -o <path>               compile and link to an executable at <path>
         \\  --sema                  run semantic analysis
         \\  --jit                   compilation target
