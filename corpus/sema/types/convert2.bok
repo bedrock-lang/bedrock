@@ -1,0 +1,9 @@
+func foo() -> i32
+  const a:i32 = 10;
+  return a;
+end
+
+func main() -> f32
+  // works
+  return foo();
+end

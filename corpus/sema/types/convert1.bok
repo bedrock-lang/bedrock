@@ -1,0 +1,7 @@
+func main() -> i32
+  const a:i32 = 5;
+  const b:f64 = 5.6;
+  const c = a + b; // convert to f64
+  const d:f32 = c; // this should fail
+  return 0;
+end
