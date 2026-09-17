@@ -718,18 +718,18 @@ pub const Codegen = struct {
                     return e; // return if assigning in '_' (it is discard mf)
                 }
                 // lookup for var on stack
-                const alloca = self.stack_map.get(i.name).?;
+                const ptr = self.stack_map.get(i.name) orelse self.global_map.get(i.name) orelse return error.VariableNotFound;
                 if (a.op == null) {
-                    _ = llvm.LLVMBuildStore(self.builder, e, alloca);
-                    return alloca;
+                    _ = llvm.LLVMBuildStore(self.builder, e, ptr);
+                    return ptr;
                 } else {
                     const target_ty = self.expr_type(a.target);
                     const llvm_target_ty = try self.get_llvm_type_of(target_ty);
-                    const old = llvm.LLVMBuildLoad2(self.builder, llvm_target_ty, alloca, "");
+                    const old = llvm.LLVMBuildLoad2(self.builder, llvm_target_ty, ptr, "");
                     const is_signed = self.is_signed_type(target_ty);
                     const result = try self.codegen_compound_op(a.op.?, old, e, is_signed);
-                    _ = llvm.LLVMBuildStore(self.builder, result, alloca);
-                    return alloca;
+                    _ = llvm.LLVMBuildStore(self.builder, result, ptr);
+                    return ptr;
                 }
             },
             .index => |*i| {
