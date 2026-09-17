@@ -1,0 +1,10 @@
+// output: 28.27935
+
+var PI: f32 = 3.14215;
+
+func main() -> f32
+  var r:f32 = 3.0;
+  var result:f32 = PI * r * r;
+  PI = 3.14;
+  return result;
+end
