@@ -238,9 +238,6 @@ pub const Sema = struct {
                 if (dty != .invalid and aty != .invalid and !self.types.assignable(aty, dty)) {
                     try self.compiler.add_sem_error("type mismatch: expected {s}, found {s}", .{ self.types.name_of(dty), self.types.name_of(aty) }, .Error, c.token);
                 }
-                self.scope.declare(.{ .name = c.name, .kind = .variable, .ty = if (dty != .invalid) dty else aty }) catch |e| {
-                    if (e == error.DuplicateName) try self.compiler.add_sem_error("Duplicate declaration: {s}\n", .{c.name}, .Error, c.token);
-                };
                 self.scope.declare(.{ .name = c.name, .kind = .constant, .ty = if (dty != .invalid) dty else aty }) catch |e| {
                     if (e == error.DuplicateName) try self.compiler.add_sem_error("Duplicate declaration: {s}\n", .{c.name}, .Error, c.token);
                 };
