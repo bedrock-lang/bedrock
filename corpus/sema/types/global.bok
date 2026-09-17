@@ -1,0 +1,8 @@
+const PI: f32 = 3.14215;
+var Radius: f32 = 4.2;
+
+func main() -> f32
+  PI = 3.14;     // error
+  Radius = 42.0; // no error
+  return PI;
+end

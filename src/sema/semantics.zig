@@ -241,6 +241,9 @@ pub const Sema = struct {
                 self.scope.declare(.{ .name = c.name, .kind = .variable, .ty = if (dty != .invalid) dty else aty }) catch |e| {
                     if (e == error.DuplicateName) try self.compiler.add_sem_error("Duplicate declaration: {s}\n", .{c.name}, .Error, c.token);
                 };
+                self.scope.declare(.{ .name = c.name, .kind = .constant, .ty = if (dty != .invalid) dty else aty }) catch |e| {
+                    if (e == error.DuplicateName) try self.compiler.add_sem_error("Duplicate declaration: {s}\n", .{c.name}, .Error, c.token);
+                };
             },
             .local_static_var_stmt => |lv| {
                 const dty: types.TypeId = if (lv.type_ann) |ty| try self.types.resolve_type(ty, self.scope) else .invalid;
@@ -257,8 +260,25 @@ pub const Sema = struct {
                 if (is_discard) {
                     _ = try self.visit_expression(a.value, null);
                 } else {
-                    _ = try self.visit_expression(a.target, null);
-                    _ = try self.visit_expression(a.value, null);
+                    switch (a.target.*) {
+                        .ident => |i| {
+                            if (self.scope.resolve(i.name)) |sym| {
+                                if (sym.kind == .constant) {
+                                    try self.compiler.add_sem_error("cannot assign to constant '{s}'", .{i.name}, .Error, a.token);
+                                } else if (sym.kind == .param) {
+                                    try self.compiler.add_sem_error("cannot assign to function parameter '{s}'", .{i.name}, .Error, a.token);
+                                }
+                            }
+                        },
+                        else => {},
+                    }
+
+                    const tty = try self.visit_expression(a.target, null);
+                    const vty = try self.visit_expression(a.value, tty);
+
+                    if (tty != .invalid and vty != .invalid and !self.types.assignable(vty, tty)) {
+                        try self.compiler.add_sem_error("type mismatch in assignment: expected {s}, found {s}", .{ self.types.name_of(tty), self.types.name_of(vty) }, .Error, a.token);
+                    }
                 }
             },
             .defer_stmt => |*d| {
