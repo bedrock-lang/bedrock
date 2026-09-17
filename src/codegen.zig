@@ -19,6 +19,7 @@ pub const Codegen = struct {
     entry: llvm.LLVMBasicBlockRef,
     opt: bool,
     stack_map: std.StringHashMap(llvm.LLVMValueRef),
+    global_map: std.StringHashMap(llvm.LLVMValueRef),
     break_targets: std.ArrayList(llvm.LLVMBasicBlockRef),
     continue_targets: std.ArrayList(llvm.LLVMBasicBlockRef),
     struct_types: std.StringHashMap(llvm.LLVMTypeRef),
@@ -52,6 +53,7 @@ pub const Codegen = struct {
             .entry = undefined,
             .opt = false,
             .stack_map = std.StringHashMap(llvm.LLVMValueRef).init(allocator),
+            .global_map = std.StringHashMap(llvm.LLVMValueRef).init(allocator),
             .break_targets = .empty,
             .continue_targets = .empty,
             .struct_types = std.StringHashMap(llvm.LLVMTypeRef).init(allocator),
@@ -86,6 +88,7 @@ pub const Codegen = struct {
         llvm.LLVMDisposeTargetMachine(self.tm);
         llvm.LLVMDisposeMessage(self.triple);
         self.stack_map.deinit();
+        self.global_map.deinit();
         self.break_targets.deinit(self.allocator);
         self.continue_targets.deinit(self.allocator);
         self.struct_types.deinit();
@@ -150,11 +153,46 @@ pub const Codegen = struct {
                 .proc => |*p| try self.codegen_proc(p),
                 .extern_def => |*e| try self.codegen_extern(e),
                 .type_def => |*t| try self.codegen_typedef(t),
+                .var_def => |*v| try self.codegen_var_def(v),
+                .const_def => |*c| try self.codegen_const_def(c),
                 else => {
                     // TODO:
                 },
             }
         }
+    }
+
+    pub fn codegen_var_def(self: *Codegen, v: *ast.VarDef) !void {
+        const ty = if (v.type_ann) |a|
+            try self.get_type(a)
+        else
+            try self.get_llvm_type_of(self.expr_type(v.value));
+
+        const name = try self.allocator.dupeZ(u8, v.name);
+        defer self.allocator.free(name);
+
+        const global = llvm.LLVMAddGlobal(self.mod, ty, name.ptr);
+
+        const init_val = try self.codegen_expression(v.value);
+        llvm.LLVMSetInitializer(global, init_val);
+        try self.global_map.put(v.name, global);
+    }
+
+    pub fn codegen_const_def(self: *Codegen, c: *ast.ConstDef) !void {
+        const ty = if (c.type_ann) |a|
+            try self.get_type(a)
+        else
+            try self.get_llvm_type_of(self.expr_type(c.value));
+
+        const name = try self.allocator.dupeZ(u8, c.name);
+        defer self.allocator.free(name);
+
+        const global = llvm.LLVMAddGlobal(self.mod, ty, name.ptr);
+
+        const init_val = try self.codegen_expression(c.value);
+        llvm.LLVMSetInitializer(global, init_val);
+        llvm.LLVMSetGlobalConstant(global, 1);
+        try self.global_map.put(c.name, global);
     }
 
     pub fn codegen_function(self: *Codegen, function: *ast.FunctionDef) !void {
@@ -680,18 +718,18 @@ pub const Codegen = struct {
                     return e; // return if assigning in '_' (it is discard mf)
                 }
                 // lookup for var on stack
-                const alloca = self.stack_map.get(i.name).?;
+                const ptr = self.stack_map.get(i.name) orelse self.global_map.get(i.name) orelse return error.VariableNotFound;
                 if (a.op == null) {
-                    _ = llvm.LLVMBuildStore(self.builder, e, alloca);
-                    return alloca;
+                    _ = llvm.LLVMBuildStore(self.builder, e, ptr);
+                    return ptr;
                 } else {
                     const target_ty = self.expr_type(a.target);
                     const llvm_target_ty = try self.get_llvm_type_of(target_ty);
-                    const old = llvm.LLVMBuildLoad2(self.builder, llvm_target_ty, alloca, "");
+                    const old = llvm.LLVMBuildLoad2(self.builder, llvm_target_ty, ptr, "");
                     const is_signed = self.is_signed_type(target_ty);
                     const result = try self.codegen_compound_op(a.op.?, old, e, is_signed);
-                    _ = llvm.LLVMBuildStore(self.builder, result, alloca);
-                    return alloca;
+                    _ = llvm.LLVMBuildStore(self.builder, result, ptr);
+                    return ptr;
                 }
             },
             .index => |*i| {
@@ -1034,12 +1072,13 @@ pub const Codegen = struct {
         // load var from stack
         if (self.stack_map.get(i.name)) |v| {
             return llvm.LLVMBuildLoad2(self.builder, llvm.LLVMGetAllocatedType(v), v, "");
-        } else {
-            log.err("variable not found: {s}\n", .{i.name});
         }
 
-        // TODO: error
-        unreachable;
+        if (self.global_map.get(i.name)) |g| {
+            const val_type = llvm.LLVMGlobalGetValueType(g);
+            return llvm.LLVMBuildLoad2(self.builder, val_type, g, "");
+        }
+        return error.VariableNotFound;
     }
 
     pub fn codegen_call(self: *Codegen, c: *ast.CallExpr) !llvm.LLVMValueRef {
