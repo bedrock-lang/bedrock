@@ -747,6 +747,21 @@ pub const Codegen = struct {
                     return e_ptr;
                 }
             },
+            .field_access => |*f| {
+                const f_ptr = try self.codegen_field_access(f, true);
+                if (a.op == null) {
+                    _ = llvm.LLVMBuildStore(self.builder, e, f_ptr);
+                    return f_ptr;
+                } else {
+                    const elem_ty = self.expr_type(a.target);
+                    const llvm_elem_ty = try self.get_llvm_type_of(elem_ty);
+                    const old = llvm.LLVMBuildLoad2(self.builder, llvm_elem_ty, f_ptr, "");
+                    const is_signed = self.is_signed_type(elem_ty);
+                    const result = try self.codegen_compound_op(a.op.?, old, e, is_signed);
+                    _ = llvm.LLVMBuildStore(self.builder, result, f_ptr);
+                    return f_ptr;
+                }
+            },
             else => {
                 // TODO:
                 return null;
@@ -859,12 +874,12 @@ pub const Codegen = struct {
             .array_literal => |*a| try self.codegen_array(a, e),
             .index => |*i| try self.codegen_index(i),
             .struct_literal => |*s| try self.codegen_struct_literal(s, expected_ty),
-            .field_access => |*f| try self.codegen_field_access(f),
+            .field_access => |*f| try self.codegen_field_access(f, false),
             else => unreachable,
         };
     }
 
-    pub fn codegen_field_access(self: *Codegen, f_access: *ast.FieldAccessExpr) anyerror!llvm.LLVMValueRef {
+    pub fn codegen_field_access(self: *Codegen, f_access: *ast.FieldAccessExpr, assign: bool) anyerror!llvm.LLVMValueRef {
         // NOTE: currently only for structs field access
         const ident = switch (f_access.target.*) {
             .ident => |i| i,
@@ -875,17 +890,15 @@ pub const Codegen = struct {
         if (target_ty == .invalid)
             return error.InvalidType;
         const target_type = self.compiler.sema.types.get(target_ty);
-        //   Point   -> load Point from stack
-        //   *Point  -> load pointer to Point from stack
+        // Point   -> load Point from stack
+        // *Point  -> load pointer to Point from stack
         var struct_ty_id: types.TypeId = .invalid;
         var struct_ptr: llvm.LLVMValueRef = undefined;
         switch (target_type.*) {
             .struct_ty => {
                 struct_ty_id = target_ty;
                 const struct_slot = self.stack_map.get(ident.name) orelse return error.VariableNotFound;
-                const llvm_struct_ty = try self.get_llvm_type_of(struct_ty_id);
                 struct_ptr = struct_slot;
-                _ = llvm_struct_ty;
             },
             .pointer => |p| {
                 struct_ty_id = p.child;
@@ -936,6 +949,8 @@ pub const Codegen = struct {
             "",
         );
 
+        if (assign) return field_ptr;
+
         const llvm_field_ty = try self.get_llvm_type_of(field_type);
         return llvm.LLVMBuildLoad2(self.builder, llvm_field_ty, field_ptr, "");
     }
@@ -945,6 +960,8 @@ pub const Codegen = struct {
             self.struct_types.get(s_lit.name) orelse return error.NoStructTypeAvailable
         else
             expected_ty orelse return error.NoStructTypeAvailable;
+
+        log.debug("struct name is: {s}\n", .{s_lit.name});
 
         var struct_value = llvm.LLVMGetUndef(s_ty);
         for (s_lit.field_inits.items, 0..) |*f, idx| {

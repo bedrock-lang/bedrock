@@ -1,0 +1,12 @@
+// output: 120
+type Point = struct
+    x: i32,
+    y: i32,
+end
+
+func main() -> i32
+    const a: i32 = 10;
+    var p: Point = _ where x = 10, y = 10 end
+    p.x += 100;
+    return p.x + p.y;
+end
