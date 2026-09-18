@@ -16,6 +16,7 @@ pub const JitRetType = union(enum) {
     i32: i32,
     f32: f32,
     f64: f64,
+    void: void,
 };
 
 pub const Compiler = struct {
@@ -169,6 +170,11 @@ pub const Compiler = struct {
                 const res = Main();
                 log.debug("jit result: {}\n", .{res});
                 return .{ .f64 = res };
+            },
+            llvm.LLVMVoidTypeKind => {
+                const Main = @as(*const fn () callconv(.c) void, @ptrFromInt(addr));
+                Main();
+                return .{ .void = {} };
             },
             else => {
                 log.err("ret type is not supported\n", .{});

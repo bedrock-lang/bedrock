@@ -1,8 +1,7 @@
 extern func printf(...) -> i32;
 
-func main() -> i32
+proc main()
   var msg: str = "Hello, Bedrock - A modern systems programming language: ";
   var year: u16 = 2026;
   _ = printf("%s ~ %d\n", msg, year);
-  return 0;
 end
