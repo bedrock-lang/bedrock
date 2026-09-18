@@ -1,0 +1,45 @@
+extern proc InitWindow(...);
+extern func WindowShouldClose() -> bool;
+extern proc BeginDrawing();
+extern proc EndDrawing();
+extern proc CloseWindow();
+extern proc ClearBackground(...);
+extern proc DrawRectangle(...);
+
+func main() -> i32
+  var white: i64 = 245 | (245 << 8) | (245 << 16) | (255 << 24);
+  var skin: i64 = 224 | (180 << 8) | (135 << 16) | (255 << 24);
+  var nose: i64 = 188 | (142 << 8) | (106 << 16) | (255 << 24);
+  var robe: i64 = 89 | (122 << 8) | (66 << 16) | (255 << 24);
+  var robe_dark: i64 = 63 | (88 << 8) | (47 << 16) | (255 << 24);
+  var black: i64 = 10 | (10 << 8) | (10 << 16) | (255 << 24);
+
+  InitWindow(800, 600, "Minecraft Villager");
+  while !WindowShouldClose()
+    BeginDrawing();
+    ClearBackground(white);
+
+    // Arms
+    DrawRectangle(290, 210, 35, 150, robe);
+    DrawRectangle(475, 210, 35, 150, robe);
+
+    // Body / robe
+    DrawRectangle(320, 200, 160, 220, robe);
+    DrawRectangle(320, 340, 160, 30, robe_dark);
+
+    // Head
+    DrawRectangle(340, 90, 120, 110, skin);
+
+    // Eyebrows (villagers have a monobrow-style look per eye)
+    DrawRectangle(355, 130, 25, 8, black);
+    DrawRectangle(420, 130, 25, 8, black);
+
+    // Big nose
+    DrawRectangle(380, 138, 40, 55, nose);
+
+    EndDrawing();
+  end
+
+  CloseWindow();
+  return 0;
+end
