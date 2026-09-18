@@ -96,6 +96,7 @@ test "codegen-test" {
                 .i32 => try std.fmt.allocPrint(allocator, "{}", .{res.i32}),
                 .f32 => try std.fmt.allocPrint(allocator, "{}", .{res.f32}),
                 .f64 => try std.fmt.allocPrint(allocator, "{}", .{res.f64}),
+                .void => "",
             };
 
             std.testing.expectEqual(c.errors.items.len, 0) catch {
