@@ -16,7 +16,7 @@ pub fn main(init: std.process.Init) !void {
     var args = std.process.Args.iterate(init.minimal.args);
     defer args.deinit();
 
-    const options = try cli.parse(&args);
+    const options = try cli.parse(allocator, &args);
 
     // build dir for compiler artifacts
     try std.Io.Dir.cwd().deleteTree(init.io, "./build");

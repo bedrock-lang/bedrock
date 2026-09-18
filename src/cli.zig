@@ -13,9 +13,10 @@ pub const Options = struct {
     link: bool = false,
     output: []const u8 = "a.out",
     testing: bool = false,
+    link_flags: std.ArrayList([]const u8) = .empty,
 };
 
-pub fn parse(args: anytype) !Options {
+pub fn parse(allocator: std.mem.Allocator, args: anytype) !Options {
     var t: []const u8 = "";
     switch (builtin.os.tag) {
         .linux => t = "x86",
@@ -71,6 +72,8 @@ pub fn parse(args: anytype) !Options {
         } else if (std.mem.eql(u8, arg, "--jit")) {
             options.run_jit = true;
             options.sema = true;
+        } else if (std.mem.startsWith(u8, arg, "-l") or std.mem.startsWith(u8, arg, "-L")) {
+            try options.link_flags.append(allocator, arg);
         } else {
             std.debug.print("error: unknown argument '{s}'\n", .{arg});
             return error.UnknownArgument;
@@ -107,6 +110,8 @@ pub fn printUsage() void {
         \\  -o <path>               compile and link to an executable at <path>
         \\  --sema                  run semantic analysis
         \\  --jit                   compilation target
+        \\  -l<name>                link against a library
+        \\  -L<path>                add a library search path
         \\  --help                  show this help
         \\
     , .{});

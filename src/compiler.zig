@@ -63,16 +63,21 @@ pub const Compiler = struct {
         const rpath_flag = try std.fmt.allocPrint(self.allocator, "-Wl,-rpath,{s}", .{rt_dir});
         defer self.allocator.free(rpath_flag);
 
-        const argv = [_][]const u8{
+        var argv: std.ArrayList([]const u8) = .empty;
+        defer argv.deinit(self.allocator);
+
+        try argv.appendSlice(self.allocator, &.{
             "cc",
             obj_path,
             rt_lib,
             rpath_flag,
             "-o",
             self.opt.output,
-        };
+        });
 
-        const result = try std.process.run(self.allocator, self.io, .{ .argv = &argv });
+        try argv.appendSlice(self.allocator, self.opt.link_flags.items);
+
+        const result = try std.process.run(self.allocator, self.io, .{ .argv = argv.items });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
@@ -320,5 +325,6 @@ pub const Compiler = struct {
             self.allocator.free(e.msg);
         }
         self.errors.deinit(self.allocator);
+        self.opt.link_flags.deinit(self.allocator);
     }
 };
