@@ -726,8 +726,14 @@ pub const Codegen = struct {
                     return e; // return if assigning in '_' (it is discard mf)
                 }
                 // lookup for var on stack
-                const ptr = self.stack_map.get(i.name) orelse self.global_map.get(i.name) orelse return error.VariableNotFound;
+                var ptr = self.stack_map.get(i.name) orelse self.global_map.get(i.name) orelse return error.VariableNotFound;
                 if (a.op == null) {
+                    // check for undefined array updation
+                    if (self.compiler.sema.types.get(ty).* == .array) {
+                        try self.stack_map.put(i.name, e);
+                        ptr = self.stack_map.get(i.name) orelse self.global_map.get(i.name) orelse return error.VariableNotFound;
+                        return ptr;
+                    }
                     _ = llvm.LLVMBuildStore(self.builder, e, ptr);
                     return ptr;
                 } else {
