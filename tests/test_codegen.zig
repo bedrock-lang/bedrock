@@ -93,7 +93,10 @@ test "codegen-test" {
                 return;
             };
             const res_dup = switch (res) {
+                .i8 => try std.fmt.allocPrint(allocator, "{}", .{res.i8}),
+                .i16 => try std.fmt.allocPrint(allocator, "{}", .{res.i16}),
                 .i32 => try std.fmt.allocPrint(allocator, "{}", .{res.i32}),
+                .i64 => try std.fmt.allocPrint(allocator, "{}", .{res.i64}),
                 .f32 => try std.fmt.allocPrint(allocator, "{}", .{res.f32}),
                 .f64 => try std.fmt.allocPrint(allocator, "{}", .{res.f64}),
                 .void => "",

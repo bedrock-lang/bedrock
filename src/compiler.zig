@@ -14,6 +14,9 @@ const Error = error{ CompilerFail, JitError, MainFuncNotFound };
 
 pub const JitRetType = union(enum) {
     i32: i32,
+    i8: i8,
+    i16: i16,
+    i64: i64,
     f32: f32,
     f64: f64,
     void: void,
@@ -154,10 +157,37 @@ pub const Compiler = struct {
 
         switch (llvm.LLVMGetTypeKind(return_type)) {
             llvm.LLVMIntegerTypeKind => {
-                const Main = @as(*const fn () callconv(.c) i32, @ptrFromInt(addr));
-                const res = Main();
-                log.debug("jit result: {}\n", .{res});
-                return .{ .i32 = res };
+                switch (llvm.LLVMGetIntTypeWidth(return_type)) {
+                    8 => {
+                        const Main = @as(*const fn () callconv(.c) i8, @ptrFromInt(addr));
+                        const res = Main();
+                        log.debug("jit result: {}\n", .{res});
+                        return .{ .i8 = res };
+                    },
+                    16 => {
+                        const Main = @as(*const fn () callconv(.c) i16, @ptrFromInt(addr));
+                        const res = Main();
+                        log.debug("jit result: {}\n", .{res});
+                        return .{ .i16 = res };
+                    },
+                    32 => {
+                        const Main = @as(*const fn () callconv(.c) i32, @ptrFromInt(addr));
+                        const res = Main();
+                        log.debug("jit result: {}\n", .{res});
+                        return .{ .i32 = res };
+                    },
+                    64 => {
+                        const Main = @as(*const fn () callconv(.c) i64, @ptrFromInt(addr));
+                        const res = Main();
+                        log.debug("jit result: {}\n", .{res});
+                        return .{ .i64 = res };
+                    },
+                    //todo: add more widths
+                    else => {
+                        log.err("int width is not supported\n", .{});
+                        return Error.JitError;
+                    },
+                }
             },
             llvm.LLVMFloatTypeKind => {
                 const Main = @as(*const fn () callconv(.c) f32, @ptrFromInt(addr));
