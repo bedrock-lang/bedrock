@@ -1,0 +1,4 @@
+func main() -> char
+  var a = 'A';
+  return a;
+end

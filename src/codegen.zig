@@ -1340,7 +1340,7 @@ pub const Codegen = struct {
             },
             .bool_true => return llvm.LLVMConstInt(llvm.LLVMInt1TypeInContext(self.ctx), 1, 0),
             .bool_false => return llvm.LLVMConstInt(llvm.LLVMInt1TypeInContext(self.ctx), 0, 0),
-            .char => return llvm.LLVMConstInt(llvm.LLVMInt8TypeInContext(self.ctx), l.raw[0], 0),
+            .char => return llvm.LLVMConstInt(llvm.LLVMInt8TypeInContext(self.ctx), l.raw[1], 0),
             .string => {
                 const name = try self.allocator.dupeZ(u8, l.raw);
                 defer self.allocator.free(name);
