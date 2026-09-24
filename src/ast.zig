@@ -683,6 +683,8 @@ pub const LiteralKind = enum {
 
 pub const LiteralExpr = struct {
     kind: LiteralKind,
+    ivalue: u64 = 0,
+    fvalue: f64 = 0.0,
     raw: []const u8,
     token: Token,
 

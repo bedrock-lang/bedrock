@@ -754,7 +754,23 @@ pub const Parser = struct {
 
     fn parse_literal(self: *Parser) !ast.LiteralExpr {
         const tok = try self.lexer.next();
-        return .{ .kind = .integer, .raw = tok.val, .token = tok };
+        return try self.parse_int_literal(tok);
+    }
+
+    fn parse_int_literal(self: *Parser, tok: token.Token) !ast.LiteralExpr {
+        const val = std.fmt.parseInt(u64, tok.val, 10) catch {
+            try self.compiler.addError("invalid integer literal", err.Severity.Error, tok);
+            return .{ .kind = .integer, .ivalue = 0, .raw = tok.val, .token = tok };
+        };
+        return .{ .kind = .integer, .ivalue = val, .raw = tok.val, .token = tok };
+    }
+
+    fn parse_float_literal(self: *Parser, tok: token.Token) !ast.LiteralExpr {
+        const val = std.fmt.parseFloat(f64, tok.val) catch {
+            try self.compiler.addError("invalid float literal", err.Severity.Error, tok);
+            return .{ .kind = .float, .fvalue = 0.0, .raw = tok.val, .token = tok };
+        };
+        return .{ .kind = .float, .fvalue = val, .raw = tok.val, .token = tok };
     }
 
     fn parse_ident(self: *Parser) !ast.IdentExpr {
@@ -1371,19 +1387,11 @@ pub const Parser = struct {
         switch (tok.type) {
             .integer => {
                 lhs = try self.allocator.create(ast.Expr);
-                lhs.* = .{ .literal = .{
-                    .kind = ast.LiteralKind.integer,
-                    .raw = tok.val,
-                    .token = tok,
-                } };
+                lhs.* = .{ .literal = try self.parse_int_literal(tok) };
             },
             .float => {
                 lhs = try self.allocator.create(ast.Expr);
-                lhs.* = .{ .literal = .{
-                    .kind = ast.LiteralKind.float,
-                    .raw = tok.val,
-                    .token = tok,
-                } };
+                lhs.* = .{ .literal = try self.parse_float_literal(tok) };
             },
             .ident => {
                 lhs = try self.allocator.create(ast.Expr);

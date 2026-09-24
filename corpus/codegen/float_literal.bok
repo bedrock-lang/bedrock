@@ -1,0 +1,8 @@
+// output: 1045.6399999999999
+
+func main() -> f64
+  var a = 3.14;
+  var b = 1_000.5;
+  var c = 42;
+  return a + b + c;
+end
