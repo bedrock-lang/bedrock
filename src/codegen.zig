@@ -780,7 +780,13 @@ pub const Codegen = struct {
             },
             .index => |*i| {
                 var e = try self.codegen_expression_with_type(a.value, null);
-                const e_ptr = try self.codegen_array_element_ptr(i);
+                const target_ty = self.expr_type(i.target);
+                const target_type = self.compiler.sema.types.get(target_ty);
+                const e_ptr = switch (target_type.*) {
+                    .array => try self.codegen_array_element_ptr(i),
+                    .slice => try self.codegen_slice_index(i, target_ty, true),
+                    else => return error.InvalidIndex,
+                };
                 const elem_ty = self.expr_type(a.target);
                 e = try self.coerce_numeric(e, self.expr_type(a.value), elem_ty);
                 if (a.op == null) {
@@ -815,7 +821,6 @@ pub const Codegen = struct {
             else => {
                 // TODO:
                 return null;
-                // unreachable;
             },
         }
     }
@@ -1064,7 +1069,7 @@ pub const Codegen = struct {
         return struct_value;
     }
 
-    fn codegen_slice_index(self: *Codegen, i: *ast.IndexExpr, slice_ty: types.TypeId) anyerror!llvm.LLVMValueRef {
+    fn codegen_slice_index(self: *Codegen, i: *ast.IndexExpr, slice_ty: types.TypeId, ret_gep: bool) anyerror!llvm.LLVMValueRef {
         const slice_llvm_ty = try self.get_llvm_type_of(slice_ty);
         const slice_ptr = switch (i.target.*) {
             .ident => |ident| self.stack_map.get(ident.name) orelse return error.UnknownVariable,
@@ -1091,6 +1096,9 @@ pub const Codegen = struct {
             1,
             "",
         );
+
+        // for slice params assigning we need to store in gep ptr not the load inst
+        if (ret_gep) return element_ptr;
 
         return llvm.LLVMBuildLoad2(self.builder, elem_ty, element_ptr, "");
     }
@@ -1135,7 +1143,7 @@ pub const Codegen = struct {
         const target_type = self.compiler.sema.types.get(target_ty);
         switch (target_type.*) {
             .array => return self.codegen_array_index(i, target_ty),
-            .slice => return self.codegen_slice_index(i, target_ty),
+            .slice => return self.codegen_slice_index(i, target_ty, false),
             else => return error.InvalidIndex,
         }
     }
