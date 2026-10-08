@@ -27,6 +27,7 @@ pub const Codegen = struct {
 
     pub fn init(allocator: std.mem.Allocator, c: *compiler.Compiler) !Codegen {
         // initialize target machine and code emission
+        var trip = llvm.LLVMGetDefaultTargetTriple();
         if (std.mem.eql(u8, c.opt.target, "aarch64")) {
             llvm.LLVMInitializeAArch64TargetInfo();
             llvm.LLVMInitializeAArch64Target();
@@ -37,6 +38,12 @@ pub const Codegen = struct {
             llvm.LLVMInitializeX86Target();
             llvm.LLVMInitializeX86TargetMC();
             llvm.LLVMInitializeX86AsmPrinter();
+        } else if (std.mem.eql(u8, c.opt.target, "wasm")) {
+            llvm.LLVMInitializeWebAssemblyTargetInfo();
+            llvm.LLVMInitializeWebAssemblyTarget();
+            llvm.LLVMInitializeWebAssemblyTargetMC();
+            llvm.LLVMInitializeWebAssemblyAsmPrinter();
+            trip = @ptrCast(@constCast("wasm32-unknown-unknown"));
         } else {
             log.err("{s} target is not currently supported\n", .{c.opt.target});
             return Error.CodegenFail;
@@ -47,7 +54,7 @@ pub const Codegen = struct {
             .allocator = allocator,
             .compiler = c,
             .tm = undefined,
-            .triple = llvm.LLVMGetDefaultTargetTriple(),
+            .triple = trip,
             .ctx = g_ctx,
             .mod = llvm.LLVMModuleCreateWithNameInContext("module", g_ctx),
             .builder = llvm.LLVMCreateBuilderInContext(g_ctx),

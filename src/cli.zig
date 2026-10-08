@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 pub const Options = struct {
     file: []const u8,
-    target: []const u8,
+    target: []const u8 = "",
     emit_tokens: bool = false,
     emit_ast: bool = false,
     emit_ir: bool = false,
@@ -59,6 +59,14 @@ pub fn parse(allocator: std.mem.Allocator, args: anytype) !Options {
         } else if (std.mem.eql(u8, arg, "--emit-ir")) {
             options.emit_ir = true;
             options.sema = true;
+        } else if (std.mem.eql(u8, arg, "--target")) {
+            options.emit_obj = true;
+            options.link = true;
+            options.sema = true;
+            options.target = args.next() orelse {
+                std.debug.print("error: '--target' requires an compilation target\n", .{});
+                return error.MissingInput;
+            };
         } else if (std.mem.eql(u8, arg, "-o")) {
             options.emit_obj = true;
             options.link = true;
@@ -107,6 +115,7 @@ pub fn printUsage() void {
         \\Options:
         \\  --emit-ast              emit AST
         \\  --emit-ir               emit LLVM IR
+        \\  --target <name>         compile target
         \\  -o <path>               compile and link to an executable at <path>
         \\  --sema                  run semantic analysis
         \\  --jit                   compilation target
