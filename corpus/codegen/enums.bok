@@ -1,4 +1,5 @@
-// output: 0
+// output: 4
+
 type Color = enum
     green,
     red,
@@ -10,7 +11,7 @@ type Color = enum
     brown,
 end
 
-func main() -> i32
+func main() -> Color
     const c: Color = Color.pink;
-    return 0;
+    return c;
 end
