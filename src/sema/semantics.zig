@@ -144,7 +144,7 @@ pub const Sema = struct {
     fn struct_of(self: *Sema, tty: types.TypeId) types.TypeId {
         if (tty == .invalid) return .invalid;
         return switch (self.types.get(tty).*) {
-            .struct_ty => tty,
+            .struct_ty, .enum_ty => tty,
             .pointer => |p| if (p.child != .invalid and self.types.get(p.child).* == .struct_ty) p.child else .invalid,
             else => .invalid,
         };
@@ -830,15 +830,25 @@ pub const Sema = struct {
                 switch (fa.field.*) {
                     .ident => |id| {
                         if (stty == .invalid) {
-                            try self.compiler.add_sem_error("cannot access field '{s}' on non-struct type '{s}'", .{ id.name, self.types.name_of(tty) }, .Error, fa.token);
+                            try self.compiler.add_sem_error("cannot access field '{s}' on non-struct and non-enum type '{s}'", .{ id.name, self.types.name_of(tty) }, .Error, fa.token);
                             break :blk .invalid;
                         }
 
-                        const sdef = self.types.get(stty).struct_ty;
-                        for (sdef.fields.items) |sf| {
-                            if (std.mem.eql(u8, sf.name, id.name)) break :blk sf.ty;
+                        if (self.types.get(tty).* == .struct_ty) {
+                            const sdef = self.types.get(stty).struct_ty;
+                            for (sdef.fields.items) |sf| {
+                                if (std.mem.eql(u8, sf.name, id.name)) break :blk sf.ty;
+                            }
+                            try self.compiler.add_sem_error("struct '{s}' has no field '{s}'", .{ sdef.name, id.name }, .Error, fa.token);
+                            break :blk .invalid;
+                        } else if (self.types.get(tty).* == .enum_ty) {
+                            const edef = self.types.get(stty).enum_ty;
+                            for (edef.variants.items) |ef| {
+                                if (std.mem.eql(u8, ef.name, id.name)) break :blk tty;
+                            }
+                            try self.compiler.add_sem_error("struct '{s}' has no field '{s}'", .{ edef.name, id.name }, .Error, fa.token);
+                            break :blk .invalid;
                         }
-                        try self.compiler.add_sem_error("struct '{s}' has no field '{s}'", .{ sdef.name, id.name }, .Error, fa.token);
                         break :blk .invalid;
                     },
                     else => {

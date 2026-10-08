@@ -1,0 +1,16 @@
+// output: 0
+type Color = enum
+    green,
+    red,
+    blue,
+    yellow,
+    pink,
+    white,
+    black,
+    brown,
+end
+
+func main() -> i32
+    const c: Color = Color.pink;
+    return 0;
+end
