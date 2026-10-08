@@ -834,19 +834,20 @@ pub const Sema = struct {
                             break :blk .invalid;
                         }
 
-                        if (self.types.get(tty).* == .struct_ty) {
+                        const target_ty = self.types.get(stty).*;
+                        if (target_ty == .struct_ty) {
                             const sdef = self.types.get(stty).struct_ty;
                             for (sdef.fields.items) |sf| {
                                 if (std.mem.eql(u8, sf.name, id.name)) break :blk sf.ty;
                             }
                             try self.compiler.add_sem_error("struct '{s}' has no field '{s}'", .{ sdef.name, id.name }, .Error, fa.token);
                             break :blk .invalid;
-                        } else if (self.types.get(tty).* == .enum_ty) {
+                        } else if (target_ty == .enum_ty) {
                             const edef = self.types.get(stty).enum_ty;
                             for (edef.variants.items) |ef| {
                                 if (std.mem.eql(u8, ef.name, id.name)) break :blk tty;
                             }
-                            try self.compiler.add_sem_error("struct '{s}' has no field '{s}'", .{ edef.name, id.name }, .Error, fa.token);
+                            try self.compiler.add_sem_error("enum '{s}' has no field '{s}'", .{ edef.name, id.name }, .Error, fa.token);
                             break :blk .invalid;
                         }
                         break :blk .invalid;
