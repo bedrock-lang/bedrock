@@ -1,0 +1,8 @@
+const b: i32 = undefined; // this errors
+const arr: [3]i32 = undefined; // this errors
+
+func main() -> i32
+  const a: [3]i32 = [21, 42, 63];
+  a[0] += a[1]; // error
+  a[0] = 1; // error
+end
