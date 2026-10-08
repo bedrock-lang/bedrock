@@ -27,6 +27,7 @@ pub const Codegen = struct {
 
     pub fn init(allocator: std.mem.Allocator, c: *compiler.Compiler) !Codegen {
         // initialize target machine and code emission
+        var trip = llvm.LLVMGetDefaultTargetTriple();
         if (std.mem.eql(u8, c.opt.target, "aarch64")) {
             llvm.LLVMInitializeAArch64TargetInfo();
             llvm.LLVMInitializeAArch64Target();
@@ -37,6 +38,12 @@ pub const Codegen = struct {
             llvm.LLVMInitializeX86Target();
             llvm.LLVMInitializeX86TargetMC();
             llvm.LLVMInitializeX86AsmPrinter();
+        } else if (std.mem.eql(u8, c.opt.target, "wasm")) {
+            llvm.LLVMInitializeWebAssemblyTargetInfo();
+            llvm.LLVMInitializeWebAssemblyTarget();
+            llvm.LLVMInitializeWebAssemblyTargetMC();
+            llvm.LLVMInitializeWebAssemblyAsmPrinter();
+            trip = @ptrCast(@constCast("wasm32-unknown-unknown"));
         } else {
             log.err("{s} target is not currently supported\n", .{c.opt.target});
             return Error.CodegenFail;
@@ -47,7 +54,7 @@ pub const Codegen = struct {
             .allocator = allocator,
             .compiler = c,
             .tm = undefined,
-            .triple = llvm.LLVMGetDefaultTargetTriple(),
+            .triple = trip,
             .ctx = g_ctx,
             .mod = llvm.LLVMModuleCreateWithNameInContext("module", g_ctx),
             .builder = llvm.LLVMCreateBuilderInContext(g_ctx),
@@ -114,7 +121,8 @@ pub const Codegen = struct {
     }
 
     pub fn codegen(self: *Codegen) !llvm.LLVMModuleRef {
-        try self.codegen_alloc_mem();
+        if (!std.mem.eql(u8, self.compiler.opt.target, "wasm"))
+            try self.codegen_alloc_mem();
         try self.codegen_program(self.compiler.ast.program);
 
         // verify module
@@ -284,16 +292,18 @@ pub const Codegen = struct {
             try self.stack_map.put(p.name, alloca);
         }
 
-        const bok_init_fn = llvm.LLVMGetNamedFunction(self.mod, "bok_init");
-        const bok_init_type = llvm.LLVMGlobalGetValueType(bok_init_fn);
-        _ = llvm.LLVMBuildCall2(
-            self.builder,
-            bok_init_type,
-            bok_init_fn,
-            null,
-            0,
-            "",
-        );
+        if (!std.mem.eql(u8, self.compiler.opt.target, "wasm")) {
+            const bok_init_fn = llvm.LLVMGetNamedFunction(self.mod, "bok_init");
+            const bok_init_type = llvm.LLVMGlobalGetValueType(bok_init_fn);
+            _ = llvm.LLVMBuildCall2(
+                self.builder,
+                bok_init_type,
+                bok_init_fn,
+                null,
+                0,
+                "",
+            );
+        }
 
         _ = try self.codegen_statements(function.body);
 
@@ -339,16 +349,18 @@ pub const Codegen = struct {
             try self.stack_map.put(p.name, alloca);
         }
 
-        const bok_init_fn = llvm.LLVMGetNamedFunction(self.mod, "bok_init");
-        const bok_init_type = llvm.LLVMGlobalGetValueType(bok_init_fn);
-        _ = llvm.LLVMBuildCall2(
-            self.builder,
-            bok_init_type,
-            bok_init_fn,
-            null,
-            0,
-            "",
-        );
+        if (!std.mem.eql(u8, self.compiler.opt.target, "wasm")) {
+            const bok_init_fn = llvm.LLVMGetNamedFunction(self.mod, "bok_init");
+            const bok_init_type = llvm.LLVMGlobalGetValueType(bok_init_fn);
+            _ = llvm.LLVMBuildCall2(
+                self.builder,
+                bok_init_type,
+                bok_init_fn,
+                null,
+                0,
+                "",
+            );
+        }
 
         _ = try self.codegen_statements(proc.body);
 
@@ -1632,6 +1644,7 @@ pub const Codegen = struct {
         const size_val = llvm.LLVMConstInt(llvm.LLVMInt64TypeInContext(self.ctx), 8, 0);
         var args = [_]llvm.LLVMValueRef{size_val};
 
+        // TODO: handle for wasm target
         const bok_alloc_fn = llvm.LLVMGetNamedFunction(self.mod, "bok_alloc");
         const bok_alloc_type = llvm.LLVMGlobalGetValueType(bok_alloc_fn);
 

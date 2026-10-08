@@ -1,0 +1,6 @@
+extern proc out(msg :str, len: i32);
+
+func main() -> i32
+    out("bokbok", 6);
+    return 0;
+end 

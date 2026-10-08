@@ -51,6 +51,24 @@ pub const Compiler = struct {
     // runtime!! //
     // using system linker "cc" for now
     pub fn link(self: *Compiler, obj_path: []const u8) !void {
+        var argv: std.ArrayList([]const u8) = .empty;
+        defer argv.deinit(self.allocator);
+        if (std.mem.eql(u8, self.opt.target, "wasm")) {
+            try argv.appendSlice(self.allocator, &.{
+                "wasm-ld",
+                obj_path,
+                "--no-entry",
+                "--export=main",
+                "--allow-undefined",
+                "-o",
+                self.opt.output,
+            });
+            const result = try std.process.run(self.allocator, self.io, .{ .argv = argv.items });
+            defer self.allocator.free(result.stdout);
+            defer self.allocator.free(result.stderr);
+            return;
+        }
+
         var rt_lib: []const u8 = "";
         var rt_dir: []const u8 = "";
         if (std.mem.eql(u8, self.opt.target, "aarch64")) {
@@ -67,9 +85,6 @@ pub const Compiler = struct {
         // note: hardcoding -rpath so that it can find the libmemory.so
         const rpath_flag = try std.fmt.allocPrint(self.allocator, "-Wl,-rpath,{s}", .{rt_dir});
         defer self.allocator.free(rpath_flag);
-
-        var argv: std.ArrayList([]const u8) = .empty;
-        defer argv.deinit(self.allocator);
 
         try argv.appendSlice(self.allocator, &.{
             "cc",
@@ -274,8 +289,8 @@ pub const Compiler = struct {
             }
 
             if (self.opt.emit_obj) {
-                var buf: [std.fs.max_path_bytes]u8 = undefined;
-                const obj_path = try std.fmt.bufPrint(&buf, "{s}.o", .{self.opt.output});
+                var buf: [std.fs.max_path_bytes:0]u8 = undefined;
+                const obj_path = try std.fmt.bufPrintSentinel(&buf, "{s}.o", .{self.opt.output}, 0);
                 _ = llvm.LLVMTargetMachineEmitToFile(c.tm, c.mod, obj_path.ptr, llvm.LLVMObjectFile, &err_msg);
                 if (err_msg) |msg| {
                     log.err("{s}\n", .{std.mem.span(msg)});
