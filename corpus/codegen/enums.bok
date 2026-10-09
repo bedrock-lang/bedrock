@@ -1,0 +1,17 @@
+// output: 4
+
+type Color = enum
+    green,
+    red,
+    blue,
+    yellow,
+    pink,
+    white,
+    black,
+    brown,
+end
+
+func main() -> Color
+    const c: Color = Color.pink;
+    return c;
+end
