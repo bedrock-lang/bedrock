@@ -1,0 +1,46 @@
+extern func rand() -> i32;
+extern proc srand(...);
+extern func time(...) -> i32;
+extern proc printf(...);
+extern proc scanf(...);
+
+func get_randnum(a: i32, b: i32) -> i32
+  return rand() % (b - a + 1);
+end
+
+proc game(min: i32, max: i32)
+  var rand_num = get_randnum(min, max);
+  var user_guess = 0;
+  var count = 0;
+
+
+  printf("Guess the number I am thinking of between %d and %d...\n", min, max);
+  printf("Your Guess: ");
+  scanf("%d", &user_guess);
+
+  while true
+    if user_guess > rand_num
+      count+=1;
+      printf("I am thinking of a smaller number than that...\n");
+      printf("Try again:\n");
+      printf("Your Guess: ");
+      scanf("%d", &user_guess);
+    elif user_guess < rand_num
+      count+=1;
+      printf("I am thinking of a greater number than that...\n");
+      printf("Try again:\n");
+      printf("Your Guess: ");
+      scanf("%d", &user_guess);
+    else
+      count+=1;
+      printf("Yes, you guessed it right %d is the number I was thinking of!\n", user_guess);
+      printf("Total number of tries you took: %d\n", count);
+      break;
+    end
+  end
+end
+
+proc main()
+  srand(time(0));
+  game(1, 100);
+end
