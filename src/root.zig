@@ -7,5 +7,5 @@ pub const scope = @import("sema/scope.zig");
 pub const sema = @import("sema/semantics.zig");
 pub const typesystem = @import("sema/type_system.zig");
 pub const llvm = @import("llvm");
-pub const codegen = @import("codegen.zig");
+pub const codegen = @import("gen/codegen.zig");
 pub const cli = @import("cli.zig");

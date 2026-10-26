@@ -5,7 +5,7 @@ const err = @import("error.zig");
 const token = @import("token.zig");
 const parser = @import("parser.zig");
 const ast = @import("ast.zig");
-const codegen = @import("codegen.zig");
+const codegen = @import("gen/codegen.zig");
 const sema = @import("sema/semantics.zig");
 const Options = @import("cli.zig").Options;
 
