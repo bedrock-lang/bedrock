@@ -883,11 +883,13 @@ pub const FieldAccessExpr = struct {
 
     pub fn print(self: *FieldAccessExpr, indent: usize) anyerror!void {
         for (0..indent) |_| std.debug.print(" ", .{});
-        std.debug.print("field access:\n", .{});
-        try self.field.print(indent + 4);
-        for (0..indent) |_| std.debug.print(" ", .{});
+        std.debug.print("field access expr:\n", .{});
+        for (0..indent + 4) |_| std.debug.print(" ", .{});
+        std.debug.print("field:\n", .{});
+        try self.field.print(indent + 8);
+        for (0..indent + 4) |_| std.debug.print(" ", .{});
         std.debug.print("target:\n", .{});
-        try self.target.print(indent + 4);
+        try self.target.print(indent + 8);
     }
 
     pub fn deinit(self: *FieldAccessExpr, allocator: std.mem.Allocator) void {
