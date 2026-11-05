@@ -4,7 +4,7 @@ const lexer = @import("lexer.zig");
 const compiler = @import("compiler.zig");
 const err = @import("error.zig");
 const token = @import("token.zig");
-const parser = @import("parser.zig");
+const parser = @import("parser/parser.zig");
 const ast = @import("ast.zig");
 const cli = @import("cli.zig");
 

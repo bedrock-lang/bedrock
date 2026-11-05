@@ -3,6 +3,9 @@ const bedrock = @import("bedrock");
 const ast = bedrock.ast;
 const compiler = bedrock.compiler;
 const parser = bedrock.parser;
+const p_expr = bedrock.parse_expr;
+const p_stmt = bedrock.parse_stmt;
+const p_type = bedrock.parse_type;
 const cli = bedrock.cli;
 
 const StmtResult = struct {
@@ -40,7 +43,7 @@ fn parse_type(allocator: std.mem.Allocator, source: []const u8) !TypeResult {
     const c = try allocator.create(compiler.Compiler);
     c.* = compiler.Compiler.init(allocator, std.testing.io, source, options);
     var p = parser.Parser.init(allocator, source, c);
-    const ty = try p.parse_type();
+    const ty = try p_type.parse_type(&p);
     return .{ .ty = ty, .c = c };
 }
 
@@ -58,7 +61,7 @@ fn parse_expression(allocator: std.mem.Allocator, source: []const u8) ![]const u
 
     var c = compiler.Compiler.init(allocator, std.testing.io, source, options);
     var p = parser.Parser.init(allocator, source, &c);
-    var expr = try p.parse_expression();
+    var expr = try p_expr.parse_expression(&p);
     const buf = try expr.to_string(allocator);
     expr.deinit(allocator);
     try c.deinit();
@@ -80,7 +83,7 @@ fn parse_stmt(allocator: std.mem.Allocator, source: []const u8) !StmtResult {
     const c = try allocator.create(compiler.Compiler);
     c.* = compiler.Compiler.init(allocator, std.testing.io, source, options);
     var p = parser.Parser.init(allocator, source, c);
-    const stmt = try p.parse_statement();
+    const stmt = try p_stmt.parse_statement(&p);
     return .{ .stmt = stmt, .c = c };
 }
 

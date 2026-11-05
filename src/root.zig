@@ -1,7 +1,10 @@
 pub const lexer = @import("lexer.zig");
 pub const token = @import("token.zig");
 pub const ast = @import("ast.zig");
-pub const parser = @import("parser.zig");
+pub const parser = @import("parser/parser.zig");
+pub const parse_expr = @import("parser/expr.zig");
+pub const parse_type = @import("parser/types.zig");
+pub const parse_stmt = @import("parser/stmt.zig");
 pub const compiler = @import("compiler.zig");
 pub const scope = @import("sema/scope.zig");
 pub const sema = @import("sema/semantics.zig");
