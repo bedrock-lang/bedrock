@@ -272,12 +272,17 @@ fn array_element_gep(cg: *Codegen, array_ty: llvm.LLVMTypeRef, arr: Value, index
     return llvm.LLVMBuildGEPWithNoWrapFlags(cg.builder, array_ty, arr, &indices, 2, "", 0);
 }
 
+fn codegen_place_ptr(cg: *Codegen, e: *ast.Expr) anyerror!Value {
+    return switch (e.*) {
+        .ident, .field_access, .index => try codegen_addr_of(cg, e),
+        .unary => |*u| if (u.op == .deref) try codegen_addr_of(cg, e) else try codegen_expression(cg, e),
+        else => try codegen_expression(cg, e),
+    };
+}
+
 pub fn codegen_slice_index(cg: *Codegen, i: *ast.IndexExpr, slice_ty: types.TypeId, ret_gep: bool) anyerror!Value {
     const slice_llvm_ty = try cg.get_llvm_type_of(slice_ty);
-    const slice_ptr = switch (i.target.*) {
-        .ident => |ident| cg.stack_map.get(ident.name) orelse return error.UnknownVariable,
-        else => unreachable,
-    };
+    const slice_ptr = try codegen_place_ptr(cg, i.target);
 
     const slice = llvm.LLVMBuildLoad2(cg.builder, slice_llvm_ty, slice_ptr, "");
     const data_ptr = llvm.LLVMBuildExtractValue(cg.builder, slice, 0, "");
@@ -299,10 +304,7 @@ pub fn codegen_slice_index(cg: *Codegen, i: *ast.IndexExpr, slice_ty: types.Type
 }
 
 fn codegen_array_index(cg: *Codegen, i: *ast.IndexExpr, array_ty: types.TypeId, ret_gep: bool) anyerror!Value {
-    const arr = switch (i.target.*) {
-        .ident => |ident| cg.stack_map.get(ident.name) orelse cg.global_map.get(ident.name) orelse return error.UnknownVariable,
-        else => try codegen_expression(cg, i.target),
-    };
+    const arr = try codegen_place_ptr(cg, i.target);
     const llvm_array_ty = try cg.get_llvm_type_of(array_ty);
     const index = try codegen_expression(cg, i.args.items[0]);
     const element_ptr = array_element_gep(cg, llvm_array_ty, arr, index);
@@ -313,7 +315,7 @@ fn codegen_array_index(cg: *Codegen, i: *ast.IndexExpr, array_ty: types.TypeId, 
     return llvm.LLVMBuildLoad2(cg.builder, element_ty, element_ptr, "");
 }
 
-fn codegen_index(cg: *Codegen, i: *ast.IndexExpr, ret_gep: bool) anyerror!Value {
+pub fn codegen_index(cg: *Codegen, i: *ast.IndexExpr, ret_gep: bool) anyerror!Value {
     // todo: Currently only support one-dimensional arrays.
     if (i.args.items.len != 1) return error.InvalidIndex;
 
@@ -325,20 +327,40 @@ fn codegen_index(cg: *Codegen, i: *ast.IndexExpr, ret_gep: bool) anyerror!Value 
     };
 }
 
-pub fn codegen_array_element_ptr(cg: *Codegen, i: *ast.IndexExpr) !Value {
-    if (i.args.items.len != 1) return error.InvalidArrayIndex;
+fn codegen_lvalue_ptr(cg: *Codegen, e: *ast.Expr) anyerror!Value {
+    return switch (e.*) {
+        .ident => |ident| cg.stack_map.get(ident.name) orelse
+            cg.global_map.get(ident.name) orelse
+            error.UnknownVariable,
+        .field_access => |f| codegen_field_ptr(cg, f),
+        .index => |*i| codegen_index(cg, i, true),
+        else => error.UnsupportedLvalue,
+    };
+}
 
-    // for now, array target must be an identifier.
-    const arr = switch (i.target.*) {
-        .ident => |ident| cg.stack_map.get(ident.name) orelse cg.global_map.get(ident.name) orelse
-            return error.UnknownVariable,
-        else => return error.UnsupportedArrayTarget,
+fn codegen_field_ptr(cg: *Codegen, f: ast.FieldAccessExpr) !Value {
+    const base_ptr = try codegen_lvalue_ptr(cg, f.target);
+    const struct_ty = cg.expr_type(f.target);
+    if (struct_ty == .invalid) return error.InvalidType;
+    const llvm_struct_ty = try cg.get_llvm_type_of(struct_ty);
+    const field_name = switch (f.field.*) {
+        .ident => |id| id.name,
+        else => return error.InvalidFieldName,
     };
 
-    const target_ty = cg.expr_type(i.target);
-    if (target_ty == .invalid) return error.InvalidType;
+    const fields = switch (cg.ts().get(struct_ty).*) {
+        .struct_ty => |s| s.fields.items,
+        else => return error.NotAStruct,
+    };
 
-    const array_ty = try cg.get_llvm_type_of(target_ty);
-    const index = try codegen_expression(cg, i.args.items[0]);
-    return array_element_gep(cg, array_ty, arr, index);
+    var field_idx: ?usize = null;
+    for (fields, 0..) |fld, idx| {
+        if (std.mem.eql(u8, fld.name, field_name)) {
+            field_idx = idx;
+            break;
+        }
+    }
+    const idx = field_idx orelse return error.UnknownField;
+
+    return llvm.LLVMBuildStructGEP2(cg.builder, llvm_struct_ty, base_ptr, @intCast(idx), "");
 }

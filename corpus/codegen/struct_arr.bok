@@ -1,0 +1,13 @@
+// output: 60
+type Point = struct
+    p: [2]i32,
+end
+
+func main() -> i32
+  var point: Point = undefined;
+  for i in 0..2
+    point.p[i] = 30;
+  end
+
+  return point.p[0] + point.p[1];
+end

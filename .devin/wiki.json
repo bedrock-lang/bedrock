@@ -1,0 +1,314 @@
+{
+  "repo_notes": [
+    {
+      "content": "Bedrock (\"bok\" is the compiler binary; source files use the .bok extension) is an imperative, statically typed systems programming language with region-based memory management: no new/free and no garbage collector in normal code, with `unsafe` blocks for low-level control and C interop. The compiler is written in Zig and generates code through the LLVM C API.\n\nPublic resources to link from the Overview and Language Guide pages: website https://bedrock-lang.com, language reference https://bedrock-lang.com/docs.html, grammar https://bedrock-lang.com/grammar.html, GitHub https://github.com/bedrock-lang/bedrock, Discord https://discord.gg/t9hJxA3qB.\n\nThis wiki has TWO audiences and every page should make clear which one it serves: (1) people who WRITE Bedrock programs: Overview, Getting Started, the Language Guide and its child pages, Grammar Reference, Glossary; (2) people who WORK ON the compiler: Frontend, Semantic Analysis, Backend, Testing and Corpus, Glossary. The Overview must route each audience to the right starting page."
+    },
+    {
+      "content": "DOCUMENTATION STYLE FOR LANGUAGE GUIDE PAGES. The Language Guide pages should read like official language documentation (in the spirit of the Rust Book or the Zig language reference), not like a source-code tour. Every feature page uses this shape: (1) a one-sentence definition; (2) the smallest complete runnable .bok example followed by its output; (3) the rules in plain language, including edge cases; (4) a 'Compile-time errors and warnings' section listing the REAL diagnostic messages the compiler emits (quote exact strings from the parser and sema source, for example the error for returning a value from a proc and the warning that control reaches the end of a func); (5) 'How the compiler implements this' with 3 to 6 bullets pointing at the lexer/parser/sema/codegen files and functions involved, linking to the internals pages; (6) 'See also' links. Write in second person, be concrete, and keep implementation detail out of the first half of a guide page.\n\nCode examples must be real: take them from corpus/ fixtures, tests/test_codegen.zig programs, the README or the website docs, and keep them valid for the parser. Tag Bedrock code fences as ```bok. Blocks close with `end`, never braces."
+    },
+    {
+      "content": "IMPLEMENTATION STATUS VERSUS THE WEBSITE (important). The website docs describe the language DESIGN, including features still marked todo or wip on docs.html. The source of truth for what works today is the compiler source plus the corpus/ and tests/ programs, NOT the website. For every language feature, determine from the source how far it gets (lexed, parsed, type-checked, lowered to LLVM IR, covered by a test) and show a status label on its guide page: Implemented, Partial (say what is missing), Parsed only, or Designed (website only). Never document a Designed feature as if it works. When docs.html, grammar.html and the source disagree, document what the source does and add a short 'Docs vs implementation' note.\n\nFeatures the website marks todo/wip, or that need a status check: enum types; match/case (including the non-exhaustive-match warning and the else arm); optional types `?T` and `nil`; error unions `T!` with `try` and `orelse`; modules (`import`, `pub`); `unsafe` blocks (wip); the region memory model (`region` blocks, `&` references, lifetime annotations such as `&@p Person` and `[@p <= @r]`, `new(@static)`); generics (type_params); `comptime`; `inline`; `static var`; `defer`; methods defined inside structs; conversion of str to a null-terminated C string.\n\nDiscrepancies already spotted between the website pages (verify against the source, then document the truth): docs.html shows `..=` inclusive ranges and `[]T` slice types, but grammar.html's range_expr only has `..` and its array_type requires an INTEGER or `_` size; docs.html uses where-literals (`Person where name = \"Alice\", age = 20 end`) and `region` blocks that do not appear in grammar.html; docs.html says calling C functions requires `unsafe`, yet its own hello-world calls extern printf outside any unsafe block; the escape sequences listed in docs.html are a superset of those in grammar.html; the reserved-word list on docs.html includes ptr, new and undefined, so check which of them exist in token.zig's keyword lookup."
+    },
+    {
+      "content": "PIPELINE AND NAMING. Describe the pipeline consistently on every page: source text, then lexer (src/lexer.zig, src/token.zig), then parser (recursive descent for items/statements/types and a Pratt parser for expressions), then AST (src/ast.zig), then semantic analysis (Sema: scopes, type interning, checks), then LLVM IR generation (Codegen, through the C bindings in src/llvm.h), then EITHER object emission plus linking with `cc` OR in-process execution with the ORC LLJIT (`--jit`). The region-based memory runtime lives in src/memory/memory.zig (bok_init, bok_alloc, bok_deinit) and is built as libmemory, which generated code calls into. Diagnostics flow through src/error.zig and Compiler.addError/emitErrors. Tests live in tests/ (root.zig, test_codegen.zig) with .bok fixtures under corpus/. Always use the real type, function and file names from the source; if a name in these notes does not match the source, trust the source.\n\nTerminology: say 'Bedrock' for the language, 'bok' for the compiler/CLI, and '.bok files' for source. Write `proc` (does work, returns no value, bare `return;` allowed) and `func` (declares `-> T` and must return a value) in code font. Blocks end with the keyword `end`; `type X = T;` aliases end with a semicolon while `struct` and `enum` definitions end with `end`. `var` bindings are mutable and `const` bindings are not. Say 'region' for the memory-model concept and 'arena' only for the runtime implementation. Link a glossary term the first time it appears on a page."
+    },
+    {
+      "content": "CONVENTIONS FOR COMPILER-INTERNALS PAGES (Frontend, Semantic Analysis, Backend, Testing). Name concrete files, types and functions. Explain WHY a design choice was made (for example why func and proc are separate keywords, why expressions use binding powers, why types are interned, why `end` delimits blocks) when the code or comments reveal the reason. Document Zig allocator ownership and deinit conventions. For each phase list its inputs, its outputs and the diagnostics it can emit. Use Mermaid diagrams for the pipeline, the scope chain and Compiler.run phase ordering, and a sequence diagram for JIT execution. End each internals page with a short 'How to extend this' section (for example the steps to add a keyword, a statement kind, a type or a lowering rule, touching token, lexer, parser, ast, sema, codegen, and corpus/tests) whenever the code makes those steps clear. Do not speculate: if something cannot be confirmed from the source, say so."
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Landing page: what Bedrock is (imperative, statically typed, region-based memory, no GC, `unsafe` for C interop and low-level control), its design goals, a hello-world, the repository layout, the compilation pipeline at a glance, and a 'where do I start' router for language users versus compiler contributors.",
+      "page_notes": [
+        {
+          "content": "Open with the website's three pillars, verified against the source: a familiar imperative core (proc, func, struct, modules; no classes or inheritance), regions instead of GC, and explicit failure through types (`File!` can fail, `?User` may be absent). Mark any pillar that is not implemented yet as 'Designed' (see the repo notes on status). Include a hello-world .bok program with the exact commands `bok hello.bok --jit` and `bok hello.bok -o hello`. Add a Mermaid flowchart of the pipeline, a repository map (src/, src/sema/, src/memory/, tests/, corpus/, build.zig), a 'Life of a Bedrock program' walkthrough tracing hello.bok through lexing, parsing, sema, codegen and execution, and an 'Adding a language feature end to end' section listing which files change (token, lexer, parser, ast, sema, codegen, corpus/tests). Finish with two reading paths: 'I want to write Bedrock' and 'I want to hack on the compiler'."
+        }
+      ]
+    },
+    {
+      "title": "Getting Started: Install, Build and Run",
+      "purpose": "Step-by-step tutorial: install the Zig and LLVM prerequisites, build the `bok` binary with build.zig (bok exe, libmemory, tests), write hello.bok, run it with --jit, compile a native binary with -o, link C libraries with -l/-L, run `zig build test`, troubleshoot common failures, and a full `bok` command-line reference from src/cli.zig.",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": "Mirror the website's Getting Started section (`extern proc printf(...);` then `proc main()` ... `end`, with the note that libc printf is used until Bedrock has its own stdlib). The website currently defers installation to the README because there is no package manager yet, so pull exact Zig and LLVM version requirements from build.zig, build.zig.zon and the README instead of guessing. Include a table of every flag in src/cli.zig's Options (name, argument, default, effect) and a short note on exit codes and error output. Add a Troubleshooting section for missing LLVM, a missing libmemory, linker errors and JIT symbol-lookup failures, but only where the source gives evidence for the cause."
+        }
+      ]
+    },
+    {
+      "title": "Language Guide",
+      "purpose": "Entry point for Bedrock programmers: philosophy (simplicity, readability, practicality; no classes, inheritance or hidden control flow), `end`-delimited blocks, mutable-by-default var versus const, `//` comments, identifiers, reserved words, statement terminators, a feature-status table, and a learning path through the child pages.",
+      "page_notes": [
+        {
+          "content": "This page is the table of contents for the language reference. Include (a) a 'Bedrock in five minutes' tour in one or two short .bok programs (proc and func, var and const, a struct with a where-literal, a for loop over a range, an if/elif/else); (b) the reserved-word list grouped by purpose and flagged by which keywords the lexer actually recognizes (from token.zig); (c) a feature-status table (Implemented / Partial / Parsed only / Designed) for every major feature, linking to the child pages; (d) an explanation that blocks close with `end`, that a block may sit on one line (`if (x) a(); else b(); end`), and that only `//` line comments exist (no block comments); (e) links out to https://bedrock-lang.com/docs.html and https://bedrock-lang.com/grammar.html."
+        }
+      ]
+    },
+    {
+      "title": "Types, Variables and Literals",
+      "purpose": "Reference for var/const bindings and type inference, explicit annotations, numeric types (i8 to i64, u8 to u64, isize/usize, f32/f64) and literals (decimal, 0x hex, 0o octal, 0b binary, `_` separators), bool, char (u8), str as a {ptr, len} fat pointer and string escapes, ranges (`..` and `..=`), nil, and type aliases (`type real = f32;`).",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "Describe implicit numeric conversion and literal coercion exactly as sema and codegen implement them (rank-based widening, signed versus unsigned handling, integer versus float literals) with small accepted and rejected examples. State clearly that inference is static, not dynamic typing. Document `str` as a non-null-terminated {ptr, len} pair; the website marks conversion to a null-terminated C string as todo, so confirm in the source how string literals reach extern printf. Document which escape sequences the lexer really handles (the website docs and grammar list different sets). Explain that `type Alias = T;` ends with a semicolon, unlike struct and enum blocks. Link each section to the Type System, Numeric Types in IR and Lexer pages."
+        }
+      ]
+    },
+    {
+      "title": "Arrays and Slices",
+      "purpose": "Reference for array types `[N]T` and `[_]T`, array literals and size inference, indexing and element assignment, the 'cannot infer type or size of empty array literal' error, slices `[]T` as parameters, passing arrays to functions, iterating with for, and bounds checking.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "Use the compile-time diagnostics from sema (the empty-literal inference error, bounds-check errors for constant indices) with their exact message text. Explain the array versus slice representation at a user-friendly level (array is fixed-capacity storage, slice is a pointer plus length descriptor) and link to the aggregates page for GEP details. Show array-to-slice conversion at call sites if the source supports it, and flag anything the website lists as todo, such as slices as struct fields."
+        }
+      ]
+    },
+    {
+      "title": "Procedures and Functions",
+      "purpose": "Reference for `proc` (does work, returns no value, bare `return;` allowed) versus `func` (declares `-> T` and must return a value), parameters, calls (including named call arguments if supported), `pub` and `inline` modifiers, generic type parameters, extern declarations, the `main` entry point, the discard rule, unreachable-code diagnostics, and the design rationale for the proc/func split.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "Highlight the intentional proc/func distinction: seeing `proc` tells the reader nothing is returned, and `func` gets explicit return-type checking, which also fits the language's procedural roots. Document the exact diagnostics: returning a value from a proc is a semantic error, a func that can reach its end without returning produces the 'control reaches the end of the function' warning, and the unused-result (discard) rules; take the wording from the sema source. Show both `proc main()` and `func main() -> i32` entry points and how the JIT driver (JitRetType) and the object-file path treat each. Use the recursion programs from the codegen tests (fibonacci, binary search, karatsuba) as worked examples. Label generics, `inline` and named call arguments with their real implementation status."
+        }
+      ]
+    },
+    {
+      "title": "Control Flow",
+      "purpose": "Reference for if/elif/else, match/case (with an else arm and an exhaustiveness warning), while, for over ranges and arrays, enumerate, break/continue, defer, and `comptime` blocks; blocks end with `end`, and control-flow constructs are expressions in the grammar that can also be used as statements.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "grammar.html treats if/match/while/for as control_flow_expr that may also appear as statements without a trailing semicolon; verify in the parser and sema which positions actually work. Show if/elif/else ladders, one-line blocks, and for over `0..10` versus `0..=10` (confirm `..=` support in lexer and parser). The website marks match as todo, so document its parser, sema and codegen status and the corpus fixtures that cover it; do not claim compile-time evaluation of match unless the source does it. Explain `defer` ordering and what it can wrap (grammar: var, assignment, control flow, return and expression statements). Show break/continue and the unreachable-after-break/return diagnostics from the scope pass. Include corpus-based examples such as fizzbuzz."
+        }
+      ]
+    },
+    {
+      "title": "Structs, Enums and where-Literals",
+      "purpose": "Reference for `type Name = struct ... end` (fields, `pub` fields, methods), `type Name = enum ... end` with optional variant payloads, construction with where-literals (`Person where name = \"Alice\", age = 20 end`) and the rule that every field must be initialized, field access and mutation, and generic types.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "Enums are marked todo on the website and the grammar allows variants with payload types such as `Variant(T1, T2)`; report how far the parser, sema and codegen actually go. The website states that where-literals must initialize every field or a semantic error is raised; find the exact error text. Explain how struct types are registered in the type system (the struct registry) and how they are lowered on the aggregates page. Cover method definitions inside struct bodies only if the source supports them. Use consistent type names in all examples."
+        }
+      ]
+    },
+    {
+      "title": "Optionals, Errors and Modules",
+      "purpose": "Reference for the explicit-failure and code-organization features: optional types (`?T`, `nil`, `orelse`), error-union types (`T!`, `try`), and modules (`import a.b;`, `pub` visibility, one module per .bok file), with an honest status for each feature across parser, sema and codegen.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "The website marks all three as todo. The type grammar and the unary/postfix operators (`?`, `!`, `try`, `orelse`) already exist in grammar.html, so establish precisely what the parser accepts, what sema rejects (and with which diagnostic), and what codegen lowers. Structure the page as: design intent (using the website's `find_user -> ?User` and `load_config -> Config!` examples), then 'Current implementation status' per phase, then a roadmap-style 'What is missing'. Never present unimplemented behavior as working. Cross-link to the declarations-and-types parser page for the `?` and `!` type modifiers."
+        }
+      ]
+    },
+    {
+      "title": "Memory Model: Regions and Lifetimes",
+      "purpose": "Explains Bedrock's region-based memory model: every allocation belongs to exactly one region that is reclaimed all at once when its scope ends, the invariants (one region per allocation, no dangling references, single destruction), lexical regions, parameter borrowing, return/escape rules and static regions, separating what is designed (website) from what the runtime and compiler enforce today.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "The website marks the memory model as wip. Use its invariants as the conceptual backbone but verify every claim against sema and codegen: is the escape check implemented, are `region` blocks parsed, how do allocations currently reach bok_alloc, and when are bok_init and bok_deinit emitted. Include two or three Mermaid diagrams of nested regions and lifetimes (for example `lifetime(p2) < lifetime(p1)` means p1 cannot reference p2). Present the website examples (ret_person, lexical outer/inner regions, set_friend with `[@p <= @r]`, `new(@static)`) labeled 'Designed' unless the source supports them. End with a factual comparison table of Bedrock regions, garbage collection, manual malloc/free and Rust-style borrow checking. Link to Region-Based Memory Runtime for the implementation side."
+        }
+      ]
+    },
+    {
+      "title": "Unsafe, extern and C Interop",
+      "purpose": "Reference for `extern func` / `extern proc` declarations (typed and variadic `...`), calling libc (printf, scanf, malloc/free) and C libraries such as raylib, `unsafe` blocks and what they permit (raw pointer dereference, pointer arithmetic, manual allocation), the -l and -L link flags, ABI and type-mapping rules, and the safety rationale.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "The website says C interoperability requires an `unsafe` block, yet its own hello-world calls extern printf outside `unsafe`. Determine from sema what is actually enforced and document that, with exact diagnostics. Mark inline assembly and memory-mapped hardware access as planned. Include the printf hello world, a scanf example from the corpus, and the raylib example (extern procs using `...`, a `while !WindowShouldClose()` loop) with the exact link command using -l and -L. Map Bedrock types to C types (str versus `*u8`, integer widths, variadic argument promotion). Explain how codegen declares extern symbols and variadic calls in LLVM IR."
+        }
+      ]
+    },
+    {
+      "title": "Grammar Reference",
+      "purpose": "Complete annotated grammar of Bedrock: program and item productions, statements, expressions with the precedence ladder (orelse, ||, &&, comparison, |, ^, &, shifts, range, additive, multiplicative, unary, postfix), patterns, types and lexical elements, presented as the EBNF from bedrock-lang.com/grammar.html and reconciled with what the parser in src/ really accepts.",
+      "parent": "Language Guide",
+      "page_notes": [
+        {
+          "content": "Reproduce the grammar in EBNF grouped by section, each production with a one-line explanation and a corpus/ example. Add a precedence table (lowest to highest) mapping each level to the Pratt binding powers used in the parser so readers can connect grammar to implementation. Add a 'Grammar vs parser' table listing productions the website grammar has that the parser does not accept yet, and constructs the parser accepts that the website grammar omits (for example where-literals, `..=`, `[]T`, region blocks); derive it from the parser source and the parser and parser_error corpus fixtures. Link to the Parser and declarations pages."
+        }
+      ]
+    },
+    {
+      "title": "Frontend: Lexing and Parsing",
+      "purpose": "Overview of the frontend: how .bok source text becomes an AST, which files own each step, how errors are reported and recovered from, with a Mermaid data-flow diagram and links to the Lexer, Parser, declarations, Diagnostics and AST pages.",
+      "page_notes": [
+        {
+          "content": "Audience: compiler contributors. Include a worked example that traces a three-line program (a proc containing a for loop) from characters to tokens to AST, using the print/to_string facilities in ast.zig and the lexer test helpers. State memory and ownership expectations: who allocates tokens and AST nodes and who calls deinit."
+        }
+      ]
+    },
+    {
+      "title": "Lexer and Tokens",
+      "purpose": "src/lexer.zig scanning loop, peek/next, whitespace and `//` comments, identifiers and keyword lookup, integer literals (decimal/hex/octal/binary with `_`), floats, chars, strings with escapes, operators and compound-assignment tokens, and src/token.zig TokenType with source locations.",
+      "parent": "Frontend: Lexing and Parsing",
+      "page_notes": [
+        {
+          "content": "Include a table of every TokenType grouped by category and the full keyword table (import, pub, inline, func, proc, extern, type, struct, enum, static, const, var, defer, unsafe, if, elif, else, for, in, while, match, case, return, orelse, comptime, try, end, true, false, break, continue, nil, where, new, ptr, undefined), marking which ones are really present in the keyword lookup. Explain how line and column are tracked for diagnostics, how unterminated strings and invalid characters are reported, and how lexer unit tests are written."
+        }
+      ]
+    },
+    {
+      "title": "Parser",
+      "purpose": "Parser structure: recursive descent for items, statements and types; Pratt (binding-power) expression parsing with precedence and associativity; postfix suffixes (call, index, field access, `?`); error recovery via sync sets; and how the parser allocates and returns AST nodes.",
+      "parent": "Frontend: Lexing and Parsing",
+      "page_notes": [
+        {
+          "content": "Include the binding-power table and worked traces for `a + b * c` and a postfix chain such as `obj.method(x)[0]`. Explain why Pratt parsing is used for expressions, how `end`-delimited blocks are parsed, and how the parser decides between statement and expression forms (for example control-flow expressions used as statements with no trailing `;`). Describe the sync-set recovery strategy and cross-link to Diagnostics and Error Recovery."
+        }
+      ]
+    },
+    {
+      "title": "Parsing Declarations, Types and Statements",
+      "purpose": "How the parser handles top-level items (func, proc, type/struct/enum/alias, extern, global var/const, import), the type grammar (primitives, `*T`, `[N]T` and `[_]T`, named and generic `Name[T]`, func/proc types, `?` optional and `!` error-union modifiers), statements (var, const, assignment and compound assignment, defer, unsafe, return, break, continue) and control-flow expressions (if/elif/else, match/case, while, for/enumerate).",
+      "parent": "Frontend: Lexing and Parsing",
+      "page_notes": [
+        {
+          "content": "Organize as three sections (Items, Types, Statements), each with a table mapping grammar production to parser function to AST node, with one corpus/parser fixture per row. Call out how the parser distinguishes `type X = struct ... end` and `enum ... end` from `type X = T;` aliases, how where-literals are parsed, and how extern variadics (`...`) are represented. Mention parse-time diagnostics and which corpus/parser_error fixtures cover them."
+        }
+      ]
+    },
+    {
+      "title": "Diagnostics and Error Recovery",
+      "purpose": "src/error.zig severities, how Compiler.addError/emitErrors collect and render messages with locations, parser sync sets for recovery, sema errors versus warnings, a catalog of user-facing diagnostics, and how corpus/parser_error fixtures assert expected errors.",
+      "parent": "Frontend: Lexing and Parsing",
+      "page_notes": [
+        {
+          "content": "Make this the canonical diagnostics catalog: a table of every error and warning message string in the parser and sema source with its trigger, severity, emitting file and function, and a minimal .bok snippet that reproduces it. The Language Guide pages link here. Show what rendered output looks like (location, message, source line if rendered). Explain how a failed parse or sema stops the pipeline before codegen."
+        }
+      ]
+    },
+    {
+      "title": "AST Representation",
+      "purpose": "src/ast.zig node definitions: the Item, Stmt, Expr and Type unions, ownership and deinit conventions, source locations, and the print/to_string utilities used in tests and debugging.",
+      "parent": "Frontend: Lexing and Parsing",
+      "page_notes": [
+        {
+          "content": "Include a diagram of the node-union hierarchy and a table mapping each language construct to its node. Describe allocator ownership (who frees child nodes), how optional and error-union type modifiers and where-literals are represented, and how tests build and compare ASTs."
+        }
+      ]
+    },
+    {
+      "title": "Semantic Analysis",
+      "purpose": "Overview and walker for the sema pass: Sema.analyze and visit_item/visit_statement/visit_expression, how scopes and types are used, func-versus-proc rules, discard checks, unreachable code, array bounds and empty-literal inference diagnostics, struct initialization checks, and what sema hands to codegen.",
+      "page_notes": [
+        {
+          "content": "Present sema as a table of 'check, rule, where implemented, diagnostic text, corpus fixture'. Explain pass ordering (declaration collection versus body checks, if applicable), how expression types are recorded or returned for codegen, and what sema does not check yet (optionals, error unions, regions, modules; verify each). Link to the Type System and Scopes pages."
+        }
+      ]
+    },
+    {
+      "title": "Type System",
+      "purpose": "Type representation and rules: TypeId, the Primitive and Type unions, interning, resolve_type from AST types, assignable/unify, implicit numeric conversion ranking, literal typing and coercion, the struct registry, and alias resolution.",
+      "parent": "Semantic Analysis",
+      "page_notes": [
+        {
+          "content": "Explain interning (why equal types share an id and how that makes comparison cheap), include a conversion-rank table with accepted and rejected examples, and show how struct, array, slice, pointer, optional and error-union types are represented. Link to the Language Guide's Types page and to the numeric conversions in the Backend aggregates page. Reference the corpus/sema/types fixtures for each rule."
+        }
+      ]
+    },
+    {
+      "title": "Scopes and Symbol Resolution",
+      "purpose": "src/sema/scope.zig: scope kinds, declaration and lookup, parameter binding, loop scoping for break/continue validation, and after-break/return unreachable-code diagnostics.",
+      "parent": "Semantic Analysis",
+      "page_notes": [
+        {
+          "content": "Include a Mermaid diagram of the scope chain for a small nested program and a table of the scope kinds defined in the source. Explain how redeclaration, shadowing and const-versus-var mutability are handled, if the source enforces them, and how failed lookups are reported. Reference the corpus/sema/scope fixtures."
+        }
+      ]
+    },
+    {
+      "title": "Backend: LLVM Code Generation",
+      "purpose": "Backend overview and Codegen architecture: Codegen init, target triple and data layout, symbol and type maps, function and proc lowering, globals and constants, extern declarations, module verification and optimization passes, and how the finished module is handed to object emission or the JIT.",
+      "page_notes": [
+        {
+          "content": "Walk through lowering a whole small program (hello world, then a func with a loop) from AST to printed LLVM IR, annotating which Codegen method produced each instruction. Explain how proc (void return) and func (typed return) differ in IR, how `main` is generated, and how the module is verified before emission. Link to the child pages for detail."
+        }
+      ]
+    },
+    {
+      "title": "Lowering Expressions and Control Flow",
+      "purpose": "How Codegen lowers binary and unary operators, calls (including variadic extern calls), indexing and field access, numeric coercion at use sites, and control flow: if/elif/else, match, while and for blocks, break/continue target stacks, ranges and enumerate, defer, and early return.",
+      "parent": "Backend: LLVM Code Generation",
+      "page_notes": [
+        {
+          "content": "For each construct show the .bok snippet next to the basic-block structure it produces (labels, br/condbr, phi if any). Explain the loop-target stack used for break/continue and how `defer` is scheduled on scope exit, if implemented. Include Mermaid control-flow graphs for a for loop over a range and for an if/elif/else ladder."
+        }
+      ]
+    },
+    {
+      "title": "Aggregates, Strings and Numeric Types in IR",
+      "purpose": "LLVM-level representation of arrays and slices (descriptors, GEP index math, array-to-slice conversion), structs (types, construction, field mutation), string literals and `str` fat pointers, type aliases, integer widths and signedness, float types, and implicit conversions and literal coercion in IR.",
+      "parent": "Backend: LLVM Code Generation",
+      "page_notes": [
+        {
+          "content": "Include small IR excerpts showing the GEPs for `arr[i]`, the construction of a slice {ptr, len}, a struct field store and a widening conversion (sext, zext, sitofp and similar, as used in the source). Explain how signed versus unsigned operations are selected (sdiv/udiv, icmp predicates) as implemented. Cross-link to the Type System page for the frontend rules."
+        }
+      ]
+    },
+    {
+      "title": "Region-Based Memory Runtime",
+      "purpose": "src/memory/memory.zig: the bok_init / bok_alloc / bok_deinit arena API, how Codegen declares and calls those symbols, how libmemory is built (dylib/so) and located or loaded by the JIT and by linked binaries, and the gap between the runtime and the language-level region design.",
+      "parent": "Backend: LLVM Code Generation",
+      "page_notes": [
+        {
+          "content": "Document the arena's data structure, growth strategy, alignment and failure behavior from the Zig source, plus the exact C ABI signatures. Show where generated code calls bok_init at program start and bok_deinit at exit (verify in the source). Be explicit about what the runtime offers today (for example a single arena) versus the website's nested, lexical and static regions. Link to Memory Model: Regions and Lifetimes."
+        }
+      ]
+    },
+    {
+      "title": "Compiler Driver, Object Emission and JIT",
+      "purpose": "Driver path and execution backends: src/cli.zig Options, main.zig bootstrap, Compiler.run phase orchestration and error handling, src/llvm.h translate-C bindings, target-machine object emission, linking through `cc` with -l/-L flags, and ORC LLJIT execution (lookup of `main`, JitRetType).",
+      "parent": "Backend: LLVM Code Generation",
+      "page_notes": [
+        {
+          "content": "Include Mermaid sequence diagrams for `bok hello.bok --jit` and for `bok hello.bok -o hello`. Explain how main's return type selects JitRetType, how libmemory and extern libraries are made available to the JIT, how the object file and linker command are built, and what the process exit code is in each mode. Document how Zig imports the LLVM C API (translate-C of llvm.h) and which LLVM calls serve each stage."
+        }
+      ]
+    },
+    {
+      "title": "Testing and Corpus",
+      "purpose": "Testing strategy and a map of corpus/: parser, parser_error, sema/types, sema/scope, codegen and memory fixtures, what each directory asserts, naming conventions, how to add a new fixture, and how `zig build test` discovers and runs everything.",
+      "page_notes": [
+        {
+          "content": "Present corpus/ as a table: directory, what it verifies, how tests consume it, an example fixture. Include a 'How to add a test for a new language feature' checklist (add fixture, register it in the tests, run zig build test). Link to the two child pages."
+        }
+      ]
+    },
+    {
+      "title": "Test Harness and Unit Tests",
+      "purpose": "tests/root.zig aggregation, src/root.zig module export, lexer/AST/parser unit-test helpers and patterns, how corpus fixtures are loaded, and how to write and run a single test.",
+      "parent": "Testing and Corpus",
+      "page_notes": [
+        {
+          "content": "Show the helper functions and patterns with real snippets, plus the commands for running all tests or filtering to one file or test name."
+        }
+      ]
+    },
+    {
+      "title": "Codegen and End-to-End Tests",
+      "purpose": "tests/test_codegen.zig: compile-and-JIT execution assertions and the example programs (fibonacci, fizzbuzz, binary search, karatsuba), how return values are captured and asserted, and how memory/runtime tests work.",
+      "parent": "Testing and Corpus",
+      "page_notes": [
+        {
+          "content": "Present each example program as a mini case study: the .bok source, the language features it exercises and the asserted result. Explain how the harness invokes the compiler, executes through the JIT and checks the return value or output."
+        }
+      ]
+    },
+    {
+      "title": "Glossary",
+      "purpose": "Definitions of Bedrock and compiler terms with file pointers: bok, func vs proc, where-literal, region, region allocator/arena, TypeId, interning, binding power, Pratt parsing, sync set, discard, sema, GEP, JitRetType, ORC LLJIT, libmemory, extern, unsafe, str, and more.",
+      "page_notes": [
+        {
+          "content": "Alphabetical order. Each entry: a one- or two-sentence definition, a link to the page that explains it, and a file pointer where relevant. Cover both language terms (end, proc, func, region, where-literal, str, unsafe, extern, optional, error union) and compiler terms (binding power, interning, sync set, TypeId, GEP, JitRetType, libmemory)."
+        }
+      ]
+    }
+  ]
+}

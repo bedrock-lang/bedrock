@@ -159,7 +159,7 @@ fn assign_index(cg: *Codegen, a: *ast.AssignStmt, i: *ast.IndexExpr) !void {
     const rhs = try cg.codegen_expression_with_type(a.value, null);
     const target_ty = cg.expr_type(i.target);
     const ptr = switch (cg.ts().get(target_ty).*) {
-        .array => try expr_mod.codegen_array_element_ptr(cg, i),
+        .array => try expr_mod.codegen_index(cg, i, true),
         .slice => try expr_mod.codegen_slice_index(cg, i, target_ty, true),
         else => return error.InvalidIndex,
     };
